@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (extras.classList.contains("collapsed")) {
+            expandcollapse.classList.add("expander")
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 24-Dec-2020 at 18:41:57 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v2.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Base URL</td>
+        <td><a href="http://sandbox-cs.lingjm365.com" target="_blank">http://sandbox-cs.lingjm365.com</a></td></tr>
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files (x86)\Java\jdk1.8.0_144</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.8.0", "pytest": "5.3.1"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"allure-pytest": "2.8.6", "base-url": "1.4.2", "html": "2.1.1", "metadata": "1.10.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.2</td></tr></table>
+    <h2>Summary</h2>
+    <p>58 tests ran in 6.45 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">58 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_shiyexiangpi_result</td>
+          <td class="col-duration">0.24</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_huangdaxian_result</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_bazihehun_result</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_bazijingpi_result</td>
+          <td class="col-duration">0.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_baziyinyuan_result</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_jieshu_result</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_mailinglingyuncheng_result</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_newshiyexiangpi_result</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_yishengcaiyun_result</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_songshaoguang_result</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;liu_nian&quot;:{&quot;title&quot;:&quot;2021流年运程&quot;,&quot;sub_title&quot;:&quot;今年运程特点&quot;,&quot;sub_dec&quot;:&quot;今年財富破損，錢財易泄難聚，需及早積穀防饑。必須設法改善人緣，以免獨木難支。&quot;,&quot;dec&quot;:[{&quot;title&quot;:&quot;2021年事业运程&quot;,&quot;tag_title&quot;:&quot;事業錦囊&quot;,&quot;tag&quot;:&quot;以柔制剛，改善人緣&quot;,&quot;dec&quot;:[&quot;今年巧遇辛丑牛年，今年的運程起起伏伏，整體上難以容易讓人多煩惱，流年運程崎嶇不平，將會有諸多阻滯！必須事事小心謹慎，保持警惕戒備，以策萬全。今年還需注意工作方面會出現不少是非紛爭，而且會備受掣肘，必須要採用以柔制剛的方式來解决；切勿硬碰硬，以免兩敗俱傷而前程盡毀！並需慎防他人在背後造謠中傷。此外，今年人緣欠佳，難得助力！故此必須設法改善人緣，盡量多些與人溝通合作，以免陷於獨木難支的困境。今年對工作進展將會最有幫助的人，是屬雞的人，其次是屬鼠的人；若能彼此衷誠合作，將可收相輔相成之效。&quot;,&quot;今年在工作方面會有較多的注意事項，故此工作進展諸多阻滯，而且又容易招惹他人口舌，故此處事必須謹慎戒備，三思而行，以免一子錯而滿盤皆落索！今年工作進展欠佳的月份，是農曆正月、二月、六月、七月及十二月，在以上這幾個月期間，請記緊切勿輕舉妄動。工作進展較佳的月份，是農曆四月、八月及十月。&quot;]},{&quot;title&quot;:&quot;2021年财富运程&quot;,&quot;tag_title&quot;:&quot;財運錦囊&quot;,&quot;tag&quot;:&quot;減省支出，知足常樂&quot;,&quot;dec&quot;:[&quot;今年在財富方面的運程低迷，故此理財必須加倍小心謹慎，量入為出，盡量減省不必要支出，以免出現經濟困難。收入強差人意，甚至會出現波動，故此千萬不可憧憬，以免焦頭爛額。今年請記緊知足常樂這古訓，千萬不可妄起貪念，以免因貪而變貧。今年會有頗多意外支出，故此必須及早未雨綢繆，以免臨時手足無措。&quot;,&quot;今年財富運程欠佳，故此理財必須加倍小心謹慎，量入為出，以免錢財大量流泄不止。千萬不可妄起貪念，請緊記知足常樂這古訓。今年財富運程低迷的月份，是農曆正月、二月、六月、七月及年尾的兩個月；農曆九月及十二月需慎防受騙。財富運程較暢順的月份，是農曆四月、八月及十月。&quot;]},{&quot;title&quot;:&quot;2021年健康运程&quot;,&quot;tag_title&quot;:&quot;健康錦囊&quot;,&quot;tag&quot;:&quot;注意衛生，遠離利器&quot;,&quot;dec&quot;:[&quot;今年健康情況欠佳，必須密切注意個人的清潔衛生，以免被病魔得以乘虛而入。今年需要留意刀具，警示今年易被鋒利的器具割傷或刺傷，故此應該盡可能遠離利器！並應該盡可能避免與人發生爭執衝突。今年心臟和腸胃容易受損，必須密切注意保養，千萬不可諱疾忌醫。炎夏晚上駕車出外，必須密切注意交通安全，切勿貪快。&quot;,&quot;今年容易受傷，必須盡量遠離危險區域以慎保安康。農曆正月及四月，需密切注意交通安全。農曆六月，則需慎防被利器刺傷或割傷。農曆三月以及十二月，密切注意飲食衛生，慎防病從口入。&quot;]},{&quot;title&quot;:&quot;2021年感情运程&quot;,&quot;tag_title&quot;:&quot;感情錦囊&quot;,&quot;tag&quot;:&quot;難有進展，拋卻成見&quot;,&quot;dec&quot;:[&quot;今年性格將會變得較為偏執，因而難於與人相處融洽；必須好好改善，以免陷於形單影隻的尷尬局面。今年感情進展欠佳，難與異性擦出火花，若想保持原有的一段感情，便一定要拋卻成見，盡可能互諒互讓，否則便難免勞燕分飛。&quot;,&quot;今年難於與人和好相處，容易發生衝突。男女感情方面亦難有進展，而且很可能易退難進，必須小心維繫。今年感情易出問題的月份，是農曆的正月、二月、七月、九月及十一月。感情較佳的月份，是農曆四月、八月及十二月。&quot;]}]},&quot;liu_yue&quot;:{&quot;title&quot;:&quot;2021流月运程&quot;,&quot;dec&quot;:[{&quot;title&quot;:&quot;本月運程崎嶇，步步為營&quot;,&quot;month&quot;:&quot;農曆正月（公曆2021年2月3日至3月4日）&quot;,&quot;dec&quot;:[&quot;今年巧遇整體運程都偏向低下，故此運程崎嶇。年初這個月晦氣瀰漫，故此，工作進展諸多麻煩，並會有不少陷阱！在這期間最重要的，是採取宜守不宜攻的策略，步步為營，千萬不可輕舉妄動，以免失手而一敗塗地。財富易破損，這個月投資及賭博可免則免，否則便很可能發生虧損，還是及早積穀防饑為宜。健康平平，出門在外必須密切注意交通安全。這個月感情複雜多變，必須小心維繫。&quot;]},{&quot;title&quot;:&quot;本月備受掣肘，逆來順受&quot;,&quot;month&quot;:&quot;農曆二月（公曆2021年3月5日至4月3日）&quot;,&quot;dec&quot;:[&quot;這個月的運程依然低沉，警示工作方面將會出現不少是非紛爭，而且又會遭到權貴的無理掣肘打壓！在這段期間最重要的，是暫時祇能逆來順受，徐圖後計；千萬不可意氣用事，針鋒相對，以免將兩敗俱傷。財富運程並無起色，錢財易泄難聚，故此理財必須加倍小心謹慎。健康欠佳，身心俱疲，必須有足夠睡眠休息，以免積勞成疾。這個月情緒低落，難於與異性擦出感情火花。&quot;]},{&quot;title&quot;:&quot;本月以靜制動，謀定而動&quot;,&quot;month&quot;:&quot;農曆三月（公曆2021年4月4日至5月4日）&quot;,&quot;dec&quot;:[&quot;這個月的運程可說是雨過天青，陰霾盡散。工作困擾逐漸消除，慢慢將會漸入佳境，但可惜仍會有是非困擾，未可鬆懈！在這段期間最重要的，是必須冷靜地評估當前形勢，想清楚自己以後發展的方向部署，謀定而動，這才可確保逆境生存。財富運程先衰後盛，月初錢財易泄，月中尚好，但意外來財卻未可貪求。健康方面，仍需密切注意飲食衛生。這個月與異性有緣無份，乏善可陳。&quot;]},{&quot;title&quot;:&quot;本月時來運到，自求多福&quot;,&quot;month&quot;:&quot;農曆四月（公曆2021年5月5日至6月4日）&quot;,&quot;dec&quot;:[&quot;這個月因為整體運程不錯，故此氣勢如虹，大有可為。工作壓力消除，人事紛爭亦平息下來，得心應手，正宜乘機力爭上游！在這段期間最重要的，是自求多福，在力求上進之餘，必須不斷努力充實自己，鞏固根基，以迎接未來艱巨的挑戰。財富運程大有起色，收入改善；若要投資，這個月正是今年難得的好時機。健康良好，但晚上駕車，必須密切注意交通安全。感情方面尚好，好好培養這株情苗。&quot;]},{&quot;title&quot;:&quot;本月謙厚待人，留有餘地&quot;,&quot;month&quot;:&quot;農曆五月（公曆2021年6月5日至7月6日）&quot;,&quot;dec&quot;:[&quot;這個月的運程反覆回落，工作困擾以及是非紛爭又再出現，幸而尚不算太嚴重。在這段期間最重要的，是必須謙厚待人，廣結善緣，以免因為樹敵太多而令自己寸步難行，舉步維艱。並請緊記待人處事必須留有餘地，慎防因為迫人太甚而遭人反噬。財富運程尚可，收入無虞，但投資及賭博卻切勿太貪求，以免因貪變貧。這個月健康易損，特別要注意心臟和腸胃的保養。感情有如鏡花水月，難以捉摸。&quot;]},{&quot;title&quot;:&quot;本月易惹官非，遠離利器&quot;,&quot;month&quot;:&quot;農曆六月（公曆2021年7月7日至8月6日）&quot;,&quot;dec&quot;:[&quot;這個月的運程一沉不振，工作進展將會枝節橫生，往往徒勞無功，而且又易惹官非訴訟！在這段期間最重要的，是一定要規行矩步，潔身自愛，千萬不可甘願與人同流合污，否則便會後悔莫及！此外，必須緊守崗位，默默耕耘，切勿輕舉妄動。警示易被刀劍等利器割傷或刺傷，故此必須盡量遠離這些利器，並盡量避免與人發生爭執衝突。財富方面易破損，切戒貪念，請記緊知足常樂。&quot;]},{&quot;title&quot;:&quot;本月易惹小人，獨木難支&quot;,&quot;month&quot;:&quot;農曆七月（公曆2021年8月7日至9月6日）&quot;,&quot;dec&quot;:[&quot;這個月的運程每下愈況，勞碌奔波，但可惜工作進展卻有停滯不前之勢。警示人緣欠佳，易惹小人，恐會陷於獨木難支的困境！在這期間最重要的，是要明哲保身，盡量保持低調，遠離是非，以免因為是非纏身而一蹶不振。這個月錢財易泄難聚，將會有不少意外支出，慎防因為入不敷支而措手不及。健康欠佳，易受頭痛失眠困擾。這個月感情易起風波，請記緊切勿意氣用事。&quot;]},{&quot;title&quot;:&quot;本月秋風吹爽，埋頭苦幹&quot;,&quot;month&quot;:&quot;農曆八月（公曆2021年9月7日至10月7日）&quot;,&quot;dec&quot;:[&quot;否極泰來，這個月的運程暢旺，有如秋風吹爽，天朗氣清，正宜振翅高飛，翱翔萬里。工作壓力大減，是非紛爭亦煙消雲散！在這段期間最重要的，是要專心工作，心無旁騖地埋頭苦幹，切勿多管閒事，以免有如披簑衣救火而惹火焚身。財富運程大有起色，收入豐足，意外來財方面亦會有意外收穫，但必須懂得適可而止，千萬不可貪得無厭。健康良好，但必須遠離酒色。感情在這個月會有新機遇。&quot;]},{&quot;title&quot;:&quot;本月以柔制剛，知足常樂&quot;,&quot;month&quot;:&quot;農曆九月（公曆2021年10月8日至11月6日）&quot;,&quot;dec&quot;:[&quot;這個月運程略為回落，幸而工作進展尚可保持暢旺，但可惜卻會有諸多人事紛爭！在這段期間最重要的，是切勿與對手硬碰硬，應該設法以柔制剛，以退為進，退一步便可海闊天空，免卻了諸多不必要的煩惱。財富運程尚可，但意外來財方面切勿憧憬，以免焦頭爛額，請記緊知足常樂這古訓！並要提高警惕，慎防上當受騙。健康平平，出門在外必須密切注意人身安全，遠離危險區域。感情易碎，盡量避免與愛侶爭吵。&quot;]},{&quot;title&quot;:&quot;本月運程暢旺，相輔相成&quot;,&quot;month&quot;:&quot;農曆十月（公曆2021年11月7日至12月6日）&quot;,&quot;dec&quot;:[&quot;這個月因為整體運程暢順，工作靈感湧現，得心應手，而且人事紛爭亦平息下來！在這段期間最重要的，是要保持冷靜，切勿被勝利沖昏了頭腦而目中無人；必須與同事保持良好關係，以免合拍無人！請記緊祇有相輔相成，才可百尺竿頭，更進一步。這個月財富運程亨通，是屬牛的人全年投資有利的難得時機之一。腸胃易損，戒吃生冷及少沾煙酒。月中很可能遇見一位動人的異性。&quot;]},{&quot;title&quot;:&quot;本月謹口慎言，切戒貪念&quot;,&quot;month&quot;:&quot;農曆十一月（公曆2021年12月7日至2022年1月4日）&quot;,&quot;dec&quot;:[&quot;這個月的運程反覆向下，工作進展在月初仍然頗為暢順，但可惜月中便會枝節橫生，而且還會有人在背後造謠中傷，平添不少困擾！在這段期間最重要的，是必須保持低調，謹口慎言，切勿隨便口無遮攔，以免因而是非纏身，自損前程。財富運程反覆，收入方面俱不宜過分憧憬，切勿妄起貪念，以免因貪而變貧。健康平平，必須小心注意日常飲食衛生，慎防感染風寒。這個月切勿冷落愛侶，以免感情破裂。&quot;]},{&quot;title&quot;:&quot;本月拋卻成見，遠離損友&quot;,&quot;month&quot;:&quot;農曆十二月（公曆2022年1月5日至2月3日）&quot;,&quot;dec&quot;:[&quot;今年因為整體運程下滑，前途崎嶇，而年尾這個月工作進展非但枝節橫生，而且又會有諸多是非紛爭！在這段期間最重要的，是必須拋卻成見，盡量設法改善人際關係，切勿以牙還牙，冤冤相報，以免把自己迫入死胡同！此外，並需遠離損友。財富收入破損，整體收入俱欠佳，理財必須加倍小心謹慎，並要慎防金錢圈套。健康欠佳，慎防因暴飲暴食而病從口入。。&quot;]}]},&quot;kai_yun&quot;:null,&quot;feng_shui&quot;:null,&quot;self&quot;:{&quot;gender&quot;:&quot;男&quot;,&quot;solar_text&quot;:&quot;1985年7月1日 时辰不清楚&quot;,&quot;lunar_text&quot;:&quot;一九八五年五月十四 时辰不清楚&quot;,&quot;name&quot;:&quot;测试&quot;}}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_xingmingpeidui_result</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_qiming_teacher_peizhi</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_qiming_book[test_input0-expected0]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_qiming_book[test_input1-expected1]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_qiming_book[test_input2-expected2]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_rengongzhineng_result</td>
+          <td class="col-duration">0.19</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_rengongzhineng_pay</td>
+          <td class="col-duration">0.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_shouxiangkanyinyuan_result</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_shouxiangkancaiyun_result</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_shouxiangkanshiye_result</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_yudaolingyiban_pay</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_yudaolingyiban_result</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_AIqianshiyiyuan_result</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_bazihehunshu_result</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_meiriyunshi_result</td>
+          <td class="col-duration">0.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_lianaipeidui_result</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_mingriyunshi_result</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_qimendunjia_result</td>
+          <td class="col-duration">0.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_xingzuoyueyunshi_pay</td>
+          <td class="col-duration">0.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_xingzuoyueyunshi_taocan</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_guanyinlingqian_suiji</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/cesuan/test_cesuan.py::TestCeSuan::test_guanyinlingqian_result</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_ShenQingPingLun[test_input0-expected0]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:&quot;-1&quot;,&quot;msg&quot;:&quot;您已经评价过了&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_ShenQingPingLun[test_input1-expected1]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:10004,&quot;msg&quot;:&quot;invalid parameter&quot;,&quot;tips&quot;:&quot;accuracy must be an integer;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_ShenQingPingLun[test_input2-expected2]</td>
+          <td class="col-duration">0.04</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:10004,&quot;msg&quot;:&quot;invalid parameter&quot;,&quot;tips&quot;:&quot;accuracy must be no more than 1;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_ShenQingPingLun[test_input3-expected3]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:20005,&quot;msg&quot;:&quot;http not found&quot;,&quot;tips&quot;:&quot;资源不存在&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_ShenQingPingLun[test_input4-expected4]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:10004,&quot;msg&quot;:&quot;invalid parameter&quot;,&quot;tips&quot;:&quot;accuracy must be an integer;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_app_peizhijiekou</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;mainColor&quot;:&quot;#3890FE&quot;,&quot;btnBgColor&quot;:&quot;linear-gradient(90deg,rgba(92,177,255,1),rgba(35,149,255,1))&quot;,&quot;btnFontColor&quot;:&quot;#ffffff&quot;,&quot;navigatorData&quot;:[{&quot;title&quot;:&quot;塔罗咨询&quot;,&quot;btnText&quot;:&quot;快速提问&quot;,&quot;link&quot;:&quot;https:\/\/sandbox-cs.lingjm365.com\/taluojiehuo\/zhuye&quot;,&quot;type&quot;:2,&quot;textType&quot;:&quot;taluo&quot;,&quot;detailLink&quot;:&quot;https:\/\/sandbox-cs.lingjm365.com\/taluojiehuo\/askdetails&quot;,&quot;page&quot;:1,&quot;hasMore&quot;:true,&quot;orderLists&quot;:[]},{&quot;title&quot;:&quot;占星骰子&quot;,&quot;btnText&quot;:&quot;快速提问&quot;,&quot;link&quot;:&quot;https:\/\/sandbox-cs.lingjm365.com\/zhanxingshaizi\/index&quot;,&quot;type&quot;:3,&quot;textType&quot;:&quot;zhanxing&quot;,&quot;detailLink&quot;:&quot;https:\/\/sandbox-cs.lingjm365.com\/zhanxingshaizi\/askdetails&quot;,&quot;page&quot;:1,&quot;hasMore&quot;:true,&quot;orderLists&quot;:[]}],&quot;questionRecommend&quot;:[{&quot;img&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/ede617543a6c12-160x160.png&quot;,&quot;link&quot;:&quot;https:\/\/sandbox-cs.lingjm365.com\/taluojiehuo\/zhuye&quot;,&quot;title&quot;:&quot;塔罗占卜&quot;,&quot;btnText&quot;:&quot;去占卜&quot;},{&quot;img&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/f6497b979cbb91-160x160.png&quot;,&quot;link&quot;:&quot;https:\/\/sandbox-cs.lingjm365.com\/zhanxingshaizi\/index&quot;,&quot;title&quot;:&quot;占星骰子&quot;,&quot;btnText&quot;:&quot;去占星&quot;}]}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_ronghezhandian_list</td>
+          <td class="col-duration">0.27</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_pinglunchaxun[test_input0-expected0]</td>
+          <td class="col-duration">0.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:1,&quot;order_id&quot;:&quot;BDXM160707737600000000&quot;,&quot;product_id&quot;:&quot;bai_du_xing_ming_he_hun&quot;,&quot;position&quot;:&quot;aaa&quot;,&quot;accuracy&quot;:1,&quot;content&quot;:&quot;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_pinglunchaxun[test_input1-expected1]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:1,&quot;order_id&quot;:&quot;BDXM160707737600000000&quot;,&quot;product_id&quot;:&quot;bai_du_xing_ming_he_hun&quot;,&quot;position&quot;:&quot;&quot;,&quot;accuracy&quot;:1,&quot;content&quot;:&quot;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_pinglunchaxun[test_input2-expected2]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:0}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_pinglunchaxun[test_input3-expected3]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:0}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_pinglunchaxun[test_input4-expected4]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:1,&quot;order_id&quot;:&quot;&quot;,&quot;product_id&quot;:&quot;da_shi_yun_cheng_he_ji_sub&quot;,&quot;position&quot;:&quot;aaa&quot;,&quot;accuracy&quot;:1,&quot;content&quot;:&quot;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_get_wechat_name</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>[{&quot;id&quot;:102784,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:400},{&quot;id&quot;:102783,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:130},{&quot;id&quot;:102782,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:610},{&quot;id&quot;:102781,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:760},{&quot;id&quot;:102780,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:829},{&quot;id&quot;:102779,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:993},{&quot;id&quot;:102778,&quot;nickname&quot;:&quot;Dear_flt&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTI5FKdYuoQKjlkic6OHwTEwiafticrSxMtoqZrd7upknjTWgn3hcSwectNthvCrl3gXl46bt5z5bwGyg\/132&quot;,&quot;days&quot;:765},{&quot;id&quot;:102777,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:106},{&quot;id&quot;:102776,&quot;nickname&quot;:&quot;悟灵唉&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/2HTU1lARXy0jNparchCI3BGnKMsia1kP2nlv7Oiaaj8V88qicGdKLr99pBKmqtlKCz7HoW8N9kVUGeKBUPAPlwkng\/132&quot;,&quot;days&quot;:358},{&quot;id&quot;:102775,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:534},{&quot;id&quot;:102774,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:460},{&quot;id&quot;:102772,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:783},{&quot;id&quot;:102771,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:332},{&quot;id&quot;:102770,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:472},{&quot;id&quot;:102769,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:230},{&quot;id&quot;:102754,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:827},{&quot;id&quot;:102753,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:921},{&quot;id&quot;:102752,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:976},{&quot;id&quot;:102751,&quot;nickname&quot;:&quot;nativedog&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTJsxlibLvPHZSsduLlI9TdF29OEgHP8wELnhbVMgreCL5LibQbWWQ3jVSHtKLbyZH3x9dEP30gwFnNg\/132&quot;,&quot;days&quot;:542},{&quot;id&quot;:102625,&quot;nickname&quot;:&quot;灵机测试&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/BRpCrN2aufQhRzzliaFTPpNzQ8ibiaN6icgQNwZUjibXE6hCYHHoU0pGxUAy9uqpZ6EhQBOCHPWmOhhbR37Db51NgSg\/132&quot;,&quot;days&quot;:367},{&quot;id&quot;:102624,&quot;nickname&quot;:&quot;月月鸟&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/3r2yiaQJMc4HJCNgHuicncG3YBgTqSDBK6CYqOAlY3iaPg4RaGOJMib3A9eK6HbIiaRdXjPg6Xy1YdR2Gk6tujIZpgA\/132&quot;,&quot;days&quot;:303},{&quot;id&quot;:102623,&quot;nickname&quot;:&quot;月月鸟&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/3r2yiaQJMc4HJCNgHuicncG3YBgTqSDBK6CYqOAlY3iaPg4RaGOJMib3A9eK6HbIiaRdXjPg6Xy1YdR2Gk6tujIZpgA\/132&quot;,&quot;days&quot;:249},{&quot;id&quot;:102611,&quot;nickname&quot;:&quot;月月鸟&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/3r2yiaQJMc4HJCNgHuicncG3YBgTqSDBK6CYqOAlY3iaPg4RaGOJMib3A9eK6HbIiaRdXjPg6Xy1YdR2Gk6tujIZpgA\/132&quot;,&quot;days&quot;:730},{&quot;id&quot;:102609,&quot;nickname&quot;:&quot;月月鸟&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/3r2yiaQJMc4HJCNgHuicncG3YBgTqSDBK6CYqOAlY3iaPg4RaGOJMib3A9eK6HbIiaRdXjPg6Xy1YdR2Gk6tujIZpgA\/132&quot;,&quot;days&quot;:937},{&quot;id&quot;:102607,&quot;nickname&quot;:&quot;月月鸟&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/3r2yiaQJMc4HJCNgHuicncG3YBgTqSDBK6CYqOAlY3iaPg4RaGOJMib3A9eK6HbIiaRdXjPg6Xy1YdR2Gk6tujIZpgA\/132&quot;,&quot;days&quot;:846},{&quot;id&quot;:102606,&quot;nickname&quot;:&quot;月月鸟&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/3r2yiaQJMc4HJCNgHuicncG3YBgTqSDBK6CYqOAlY3iaPg4RaGOJMib3A9eK6HbIiaRdXjPg6Xy1YdR2Gk6tujIZpgA\/132&quot;,&quot;days&quot;:709},{&quot;id&quot;:102563,&quot;nickname&quot;:&quot;君莫笑&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/6s6thRFSap75oYrmicF66tGXWVYpaiabjibV0HPnvzVGKWnKDlT7ia9A2MiaY9mQUO1WXvramqExryRHGVT9p3S7xGA\/132&quot;,&quot;days&quot;:910},{&quot;id&quot;:102554,&quot;nickname&quot;:&quot;君莫笑&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/6s6thRFSap75oYrmicF66tGXWVYpaiabjibV0HPnvzVGKWnKDlT7ia9A2MiaY9mQUO1WXvramqExryRHGVT9p3S7xGA\/132&quot;,&quot;days&quot;:980},{&quot;id&quot;:102553,&quot;nickname&quot;:&quot;君莫笑&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/6s6thRFSap75oYrmicF66tGXWVYpaiabjibV0HPnvzVGKWnKDlT7ia9A2MiaY9mQUO1WXvramqExryRHGVT9p3S7xGA\/132&quot;,&quot;days&quot;:647},{&quot;id&quot;:102267,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:997},{&quot;id&quot;:102266,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:193},{&quot;id&quot;:102265,&quot;nickname&quot;:&quot;Dear_flt&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/Q0j4TwGTfTI5FKdYuoQKjlkic6OHwTEwiafticrSxMtoqZrd7upknjTWgn3hcSwectN3Y1cwq5vDicsCFicWR8zghKg\/132&quot;,&quot;days&quot;:570},{&quot;id&quot;:102264,&quot;nickname&quot;:&quot;悟灵唉&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/2HTU1lARXy0jNparchCI3BGnKMsia1kP2nlv7Oiaaj8V88qicGdKLr99pBKmqtlKCz7HoW8N9kVUGeKBUPAPlwkng\/132&quot;,&quot;days&quot;:840},{&quot;id&quot;:102263,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:75},{&quot;id&quot;:102262,&quot;nickname&quot;:&quot;小灵&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/aI5dZzy7T8Ib6oE0QzzNeKwSkk18yGuyADgicNCSpxgcZ8onibKDDFVGaM3REFbsdtZRiauc2Y1cicibYMibVDstPkjg\/132&quot;,&quot;days&quot;:683},{&quot;id&quot;:102261,&quot;nickname&quot;:&quot;悟灵唉&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/2HTU1lARXy0jNparchCI3BGnKMsia1kP2nlv7Oiaaj8V88qicGdKLr99pBKmqtlKCz7HoW8N9kVUGeKBUPAPlwkng\/132&quot;,&quot;days&quot;:992},{&quot;id&quot;:102171,&quot;nickname&quot;:&quot;pororo&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/u1BOweYQlz7LPAia35EJzSbUd1QMaIOYiczzn4CgAL3RSswBGmKBbqBHNrzv4hSFpJW4ORgSo4VSUXIibiaHLMRIZA\/132&quot;,&quot;days&quot;:849},{&quot;id&quot;:102170,&quot;nickname&quot;:&quot;测试mm&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/yBQfjrZsUTklk2bukJbT6ySugVnXia7EiaeaT9L7oYibRPGWI95EibDSsicOzibTbMBxxBPf4lVWk23dQjV3aVTkhAcQ\/132&quot;,&quot;days&quot;:598},{&quot;id&quot;:102169,&quot;nickname&quot;:&quot;pororo&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/u1BOweYQlz7LPAia35EJzSbUd1QMaIOYiczzn4CgAL3RSswBGmKBbqBHNrzv4hSFpJW4ORgSo4VSUXIibiaHLMRIZA\/132&quot;,&quot;days&quot;:893},{&quot;id&quot;:102161,&quot;nickname&quot;:&quot;测试mm&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/yBQfjrZsUTklk2bukJbT6ySugVnXia7EiaeaT9L7oYibRPGWI95EibDSsicOzibTbMBxxBPf4lVWk23dQjV3aVTkhAcQ\/132&quot;,&quot;days&quot;:215},{&quot;id&quot;:101855,&quot;nickname&quot;:&quot;Dylan_yang&quot;,&quot;headimgurl&quot;:&quot;http:\/\/thirdwx.qlogo.cn\/mmopen\/vi_32\/rQFplZBdUJbLoCKdApfB6sCEIpPAJzWN0lkkibb7lm7dkXsI9t4xBTURhqYVKa0vMnIL8XEEHqf0ohG5m9CNbEA\/132&quot;,&quot;days&quot;:483}]
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_free_first</td>
+          <td class="col-duration">0.03</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:20005,&quot;msg&quot;:&quot;http not found&quot;,&quot;tips&quot;:&quot;资源不存在&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_pay_wanliu</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:20005,&quot;msg&quot;:&quot;http not found&quot;,&quot;tips&quot;:&quot;资源不存在&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_baocuntousu</td>
+          <td class="col-duration">0.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;status&quot;:200,&quot;msg&quot;:&quot;success&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_tuikuan</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>success
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_get_ziyuanshuju[test_input0-expected0]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;cs_list&quot;:[{&quot;name&quot;:&quot;2021牛年麦玲玲运势&quot;,&quot;desc&quot;:&quot;2021牛年麦玲玲运势&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/mllniunianyuncheng\/index?channel=all&amp;channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/b40d80b92e67a5-704x307.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/b40d80b92e67a5-704x307.png&quot;,&quot;people_nums&quot;:85684,&quot;comment_nums&quot;:42136,&quot;sort&quot;:12,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;前世今生&quot;,&quot;desc&quot;:&quot;人死后真的有灵魂轮回吗？看完或许能找到答案！&quot;,&quot;url&quot;:&quot;https:\/\/zx.yunlcd.cn\/forecastlunhuishubundle\/index.html?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/3b68e2e5af426d-147x147.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/3b68e2e5af426d-147x147.png&quot;,&quot;people_nums&quot;:48378,&quot;comment_nums&quot;:34744,&quot;sort&quot;:11,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;2021八字姻缘&quot;,&quot;desc&quot;:&quot;姻缘天注定，半点不由人。2021年你的命定姻缘会到来吗？&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/baziyinyuan\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/c6a789ba613251-152x152.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/c6a789ba613251-152x152.png&quot;,&quot;people_nums&quot;:55897,&quot;comment_nums&quot;:39127,&quot;sort&quot;:10,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;情感导师带你走出情感困境&quot;,&quot;desc&quot;:&quot;情感导师带你走出情感困境&quot;,&quot;url&quot;:&quot;https:\/\/zx.feelsowarm.com\/nlqg\/index.html?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/images\/c274c70879d82a-704x255.jpg&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/images\/c274c70879d82a-704x255.jpg&quot;,&quot;people_nums&quot;:32354,&quot;comment_nums&quot;:24491,&quot;sort&quot;:9,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;前世姻缘&quot;,&quot;desc&quot;:&quot;你的前世究竟欠下多少情债？对今生姻缘有何影响？&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/qianshiyinyuan\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/e40b56d452ae71-147x147.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/e40b56d452ae71-147x147.png&quot;,&quot;people_nums&quot;:42845,&quot;comment_nums&quot;:45491,&quot;sort&quot;:8,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;麦玲玲2021牛年运程出炉&quot;,&quot;desc&quot;:&quot;2021年不得了！这3生肖喜事不重样，运势如雨下，好日子来了！&quot;,&quot;url&quot;:&quot;https:\/\/yy.hule58.cn\/mllniunianyuncheng\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a2c8901f2f89f8-147x147.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a2c8901f2f89f8-147x147.png&quot;,&quot;people_nums&quot;:35623,&quot;comment_nums&quot;:24936,&quot;sort&quot;:7,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;2021八字流年运势&quot;,&quot;desc&quot;:&quot;2021八字流年运势&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/baziliunianyunshi\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/d31fe96c158350-704x307.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/d31fe96c158350-704x307.png&quot;,&quot;people_nums&quot;:56894,&quot;comment_nums&quot;:46815,&quot;sort&quot;:6,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;十年大运&quot;,&quot;desc&quot;:&quot;一分钟，帮你分析何时将会是你的运势巅峰！&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/shiniandayun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a507d87140615f-147x147.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a507d87140615f-147x147.png&quot;,&quot;people_nums&quot;:58652,&quot;comment_nums&quot;:41556,&quot;sort&quot;:5,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;2021一生财运&quot;,&quot;desc&quot;:&quot;哪些八字注定一生富贵命、天生财运好？&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/yishengcaiyun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/2984df39aa704e-152x152.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/2984df39aa704e-152x152.png&quot;,&quot;people_nums&quot;:85569,&quot;comment_nums&quot;:59898,&quot;sort&quot;:4,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;2021八字合婚&quot;,&quot;desc&quot;:&quot;2021八字合婚&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/bazihehun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/a6c7ef48bf32e0-702x307.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/a6c7ef48bf32e0-702x307.png&quot;,&quot;people_nums&quot;:56884,&quot;comment_nums&quot;:39818,&quot;sort&quot;:3,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;下半生运程&quot;,&quot;desc&quot;:&quot;命中有“劫”霉运缠身？一招教你化解，老来有后福！&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/jingpinxiabansheng\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/f7664b14888b8b-147x147.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/f7664b14888b8b-147x147.png&quot;,&quot;people_nums&quot;:32365,&quot;comment_nums&quot;:22655,&quot;sort&quot;:2,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;三世书&quot;,&quot;desc&quot;:&quot;三生三世的轮回，注定你今生能不能发财...&quot;,&quot;url&quot;:&quot;https:\/\/zx.yunlcd.cn\/forecastsanshishubundle\/index.html?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/94e72bcd9519b3-147x147.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/94e72bcd9519b3-147x147.png&quot;,&quot;people_nums&quot;:76985,&quot;comment_nums&quot;:53889,&quot;sort&quot;:1,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;result&quot;,&quot;dialog&quot;:0}]}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_get_ziyuanshuju[test_input1-expected1]</td>
+          <td class="col-duration">0.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;cs_list&quot;:[{&quot;name&quot;:&quot;八字姻缘&quot;,&quot;desc&quot;:&quot;八字姻缘&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/baziyinyuan\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/uploadtouch.ggwan.com\/image\/backend\/fdb2013c7ecaa0-704x255.jpg&quot;,&quot;icon&quot;:&quot;https:\/\/uploadtouch.ggwan.com\/image\/backend\/fdb2013c7ecaa0-704x255.jpg&quot;,&quot;people_nums&quot;:85684,&quot;comment_nums&quot;:59978,&quot;sort&quot;:12,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;前世姻缘&quot;,&quot;desc&quot;:&quot;你的前世究竟⽋下多少情债?对今生姻缘有何影响?&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/qianshiyinyuan\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/8d1bab1b7b7314-148x148.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/8d1bab1b7b7314-148x148.png&quot;,&quot;people_nums&quot;:48778,&quot;comment_nums&quot;:34144,&quot;sort&quot;:11,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;2021一生财运&quot;,&quot;desc&quot;:&quot;哪些八字注定一生富贵命、天生财运好？&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/yishengcaiyun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/2984df39aa704e-152x152.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/2984df39aa704e-152x152.png&quot;,&quot;people_nums&quot;:55897,&quot;comment_nums&quot;:39127,&quot;sort&quot;:10,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;八字合婚&quot;,&quot;desc&quot;:&quot;八字合婚&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/bazihehun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/uploadtouch.ggwan.com\/image\/backend\/788feed5d3e799-704x255.jpg&quot;,&quot;icon&quot;:&quot;https:\/\/uploadtouch.ggwan.com\/image\/backend\/788feed5d3e799-704x255.jpg&quot;,&quot;people_nums&quot;:62354,&quot;comment_nums&quot;:43647,&quot;sort&quot;:9,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;2021八字流年运势&quot;,&quot;desc&quot;:&quot;2021八字流年运势&quot;,&quot;url&quot;:&quot;https:\/\/wf.siouc.cn\/baziliunianyunshi\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/d31fe96c158350-704x307.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/d31fe96c158350-704x307.png&quot;,&quot;people_nums&quot;:77845,&quot;comment_nums&quot;:54491,&quot;sort&quot;:8,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;婚后生活&quot;,&quot;desc&quot;:&quot;超准预测，你今⽣的感情婚姻!&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/hunhoushenghuo\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/46f67ec339fbb4-148x148.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/46f67ec339fbb4-148x148.png&quot;,&quot;people_nums&quot;:35623,&quot;comment_nums&quot;:24936,&quot;sort&quot;:7,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;八字精批&quot;,&quot;desc&quot;:&quot;八字精批&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/bazijingpipaipan\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/448a472a8360fc-704x255.jpg&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.tengzhihh.com\/image\/448a472a8360fc-704x255.jpg&quot;,&quot;people_nums&quot;:66894,&quot;comment_nums&quot;:46825,&quot;sort&quot;:6,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;十年大运&quot;,&quot;desc&quot;:&quot;一分钟，分析何时是你的运势巅峰!&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/shiniandayun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/87d89b5c07443e-148x149.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/87d89b5c07443e-148x149.png&quot;,&quot;people_nums&quot;:58652,&quot;comment_nums&quot;:41056,&quot;sort&quot;:5,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;紫微精批&quot;,&quot;desc&quot;:&quot;只需要输入出⽣日期，⼀生运势都可以看出，准确率⾼达95%!&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/zwzjingpi\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/8f65f80f5d90fe-148x148.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/8f65f80f5d90fe-148x148.png&quot;,&quot;people_nums&quot;:85569,&quot;comment_nums&quot;:59898,&quot;sort&quot;:4,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;一生财运&quot;,&quot;desc&quot;:&quot;&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/yishengcaiyun\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/719b6197471c15-704x255.jpg&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/719b6197471c15-704x255.jpg&quot;,&quot;people_nums&quot;:56884,&quot;comment_nums&quot;:39818,&quot;sort&quot;:3,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;banner&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;宝宝精批&quot;,&quot;desc&quot;:&quot;这天出⽣的⼈，命带财库⽆人不富，⼀生财运好事业旺!&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/baobaojingpi\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a059cc23b30385-148x149.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a059cc23b30385-148x149.png&quot;,&quot;people_nums&quot;:32365,&quot;comment_nums&quot;:22655,&quot;sort&quot;:2,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0},{&quot;name&quot;:&quot;姓名详批&quot;,&quot;desc&quot;:&quot;姓名断⼀生吉凶!快看看你⼀生注定要靠什么吃饭?&quot;,&quot;url&quot;:&quot;https:\/\/zx.jinhuirr.cn\/xingmingxiangpi\/index?channel=other&amp;schannel=jgyzywaishouxiang&quot;,&quot;banner&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a4d3f9c396a82e-148x148.png&quot;,&quot;icon&quot;:&quot;https:\/\/img-fe.ggwan.com\/images\/a4d3f9c396a82e-148x148.png&quot;,&quot;people_nums&quot;:76985,&quot;comment_nums&quot;:53889,&quot;sort&quot;:1,&quot;product_id&quot;:&quot;default&quot;,&quot;show_type&quot;:&quot;icon&quot;,&quot;position&quot;:&quot;index&quot;,&quot;dialog&quot;:0}]}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_get_ziyuanshuju[test_input2-expected2]</td>
+          <td class="col-duration">0.04</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:10004,&quot;msg&quot;:&quot;invalid parameter&quot;,&quot;tips&quot;:&quot;position is required;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_get_ziyuanshuju[test_input3-expected3]</td>
+          <td class="col-duration">0.04</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:10004,&quot;msg&quot;:&quot;invalid parameter&quot;,&quot;tips&quot;:&quot;product_id is required;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/gonggongfenlei/test_gonggongfenlei.py::TestGongGongFenLei::test_get_ziyuanshuju[test_input4-expected4]</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;code&quot;:10004,&quot;msg&quot;:&quot;invalid parameter&quot;,&quot;tips&quot;:&quot;channel is required;&quot;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/xiaochengxu/test_xiaochengxu.py::TestXiaoChengXu::test_get_userinfo</td>
+          <td class="col-duration">0.17</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>[]
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/xiaochengxu/test_xiaochengxu.py::TestXiaoChengXu::test_wechat_poor</td>
+          <td class="col-duration">0.17</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/xiaochengxu/test_xiaochengxu.py::TestXiaoChengXu::test_toutiao_neirong</td>
+          <td class="col-duration">0.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/xiaochengxu/test_xiaochengxu.py::TestXiaoChengXu::test_erweima</td>
+          <td class="col-duration">0.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>

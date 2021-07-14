@@ -1,0 +1,25 @@
+-
+  - order_id: BDXM160707737600000000
+    position: aaa
+  - code: 1
+
+-
+  - order_id: BDXM160707737600000000
+    position: ""
+  - code: 1
+
+-
+  - order_id: 123456
+    position: aaa
+  - code: 0
+
+-
+  - order_id: BDXM160707737600000000
+    position: 123456
+  - code: 0
+
+-
+  - order_id: ""
+    position: aaa
+  - code: 1
+

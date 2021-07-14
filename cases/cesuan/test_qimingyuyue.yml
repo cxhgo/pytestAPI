@@ -1,0 +1,14 @@
+-
+  - phone: 13580755582
+  - status: 1
+    message: 预约成功
+
+-
+  - phone: ""
+  - code: 30001
+    tips: 无效手机号码
+
+-
+  - phone: abcde
+  - code: 30001
+    tips: 无效手机号码

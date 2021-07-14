@@ -1,0 +1,38 @@
+-
+  - order_id: BDXM160707737600000000
+    position: aaa
+    accuracy: 1
+  - code: "-1"
+    msg: 您已经评价过了
+
+-
+  - order_id: BDXM160707737600000000
+    position: aaa
+    accuracy: a
+  - code: 10004
+    msg: invalid parameter
+    tips: accuracy must be an integer;
+
+-
+  - order_id: BDXM160707737600000000
+    position: aaa
+    accuracy: 2
+  - code: 10004
+    msg: invalid parameter
+    tips: accuracy must be no more than 1;
+
+-
+  - order_id: 123456
+    position: aaa
+    accuracy: 1
+  - code: 20005
+    msg: http not found
+    tips: 资源不存在
+
+-
+  - order_id: BDXM160707737600000000
+    position: aaa
+    accuracy: ""
+  - code: 10004
+    msg: invalid parameter
+    tips: accuracy must be an integer;

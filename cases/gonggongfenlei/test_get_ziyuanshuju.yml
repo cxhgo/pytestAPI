@@ -1,0 +1,31 @@
+-
+  - position: result
+    product_id: ai_shou_xiang
+    channel: other
+  - name: 2021牛年麦玲玲运势
+    desc: 2021牛年麦玲玲运势
+
+-
+  - position: index
+    product_id: ai_shou_xiang
+    channel: other
+  - name: 八字姻缘
+    desc: 八字姻缘
+
+-
+  - product_id: ai_shou_xiang
+    channel: other
+  - code: 10004
+    tips: position is required;
+
+-
+  - position: result
+    channel: other
+  - code: 10004
+    tips: product_id is required;
+
+-
+  - position: result
+    product_id: ai_shou_xiang
+  - code: 10004
+    tips: channel is required;
